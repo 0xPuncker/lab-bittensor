@@ -163,3 +163,20 @@ testing/
 
 # Editors
 .vscode/settings.json
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Bittensor wallet + runtime state
+.bittensor/
+wallets/
+*.npz
+
+# Lint / type-check caches not already covered above
+.ruff_cache/
+
+# Virtual environments (project-specific override of the generic block above)
+val-bittensor-venv/
