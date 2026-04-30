@@ -1,7 +1,8 @@
+bittensor>=10.3.0,<11
 starlette>=0.30.0
 pydantic>=2
 rich>=13
 pytest>=8
 torch>=2
 numpy>=1
-setuptools>=68
+setuptools>=68      # bittensor 10.3.0 pins setuptools~=70.0; PYSEC-2025-49 ignored in pip-audit
