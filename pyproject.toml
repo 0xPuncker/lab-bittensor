@@ -1,0 +1,48 @@
+# pyproject.toml — sensor / dev-tool config only.
+# Project install metadata still lives in setup.py for now (rename + PEP 621 is a
+# deferred follow-up, see .specs/project/STATE.md → Deferred Ideas).
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+src = ["template", "neurons", "tests"]
+exclude = ["docs/stream_tutorial"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I"]
+# E501 (line too long) is the noisiest rule on this codebase: every file ships
+# with a ~18-line MIT/Yuma Rao license header where individual comment lines
+# exceed our 120 budget by intent. Keep the rule off until the headers get a
+# rewrite (Deferred).
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# Package __init__.py files re-export the package surface — those imports look
+# unused to ruff but are the entire point of the file. Standard pattern.
+"__init__.py" = ["F401"]
+# template/__init__.py computes __spec_version__ from __version__ then imports
+# submodules; the submodules `from template import __spec_version__`. Imports
+# must be after the version block, so E402 is unavoidable here.
+"template/__init__.py" = ["F401", "E402"]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+files = ["template", "neurons"]
+# 28 errors live here today (Liskov violation in neurons/miner.py:46, several
+# attribute-error reports under bittensor's loosely-typed metagraph access).
+# This feature does NOT fix them — see "Out of scope" in spec.md. A future
+# type-cleanup feature will tighten config and resolve.
+
+[tool.bandit]
+# `-ll` (MEDIUM+ severity) is set on the CLI in .adp/harness.yaml.
+# B101 (assert_used) is fine in tests.
+skips = ["B101"]
+targets = ["template", "neurons"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
