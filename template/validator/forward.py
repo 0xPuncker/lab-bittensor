@@ -18,11 +18,12 @@
 # DEALINGS IN THE SOFTWARE.
 
 import time
+
 import bittensor as bt
 
 from template.protocol import Dummy
-from template.validator.reward import get_rewards
 from template.utils.uids import get_random_uids
+from template.validator.reward import get_rewards
 
 
 async def forward(self):

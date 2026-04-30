@@ -19,6 +19,7 @@
 
 import time
 import typing
+
 import bittensor as bt
 
 # Bittensor Miner Template:

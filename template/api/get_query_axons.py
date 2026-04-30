@@ -16,9 +16,10 @@
 # THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
-import numpy as np
 import random
+
 import bittensor as bt
+import numpy as np
 
 
 async def ping_uids(dendrite, metagraph, uids, timeout=3):
@@ -115,10 +116,10 @@ async def get_query_api_axons(
     Returns:
         list: A list of axon objects for the available API nodes.
     """
-    dendrite = bt.dendrite(wallet=wallet)
+    dendrite = bt.Dendrite(wallet=wallet)
 
     if metagraph is None:
-        metagraph = bt.metagraph(netuid=21)
+        metagraph = bt.Metagraph(netuid=21)
 
     if uids is not None:
         query_uids = [uids] if isinstance(uids, int) else uids

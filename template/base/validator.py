@@ -18,20 +18,20 @@
 # DEALINGS IN THE SOFTWARE.
 
 
-import copy
-import numpy as np
-import asyncio
 import argparse
+import asyncio
+import copy
 import threading
-import bittensor as bt
-
-from typing import List, Union
 from traceback import print_exception
+from typing import List, Union
+
+import bittensor as bt
+import numpy as np
 
 from template.base.neuron import BaseNeuron
 from template.base.utils.weight_utils import (
-    process_weights_for_netuid,
     convert_weights_and_uids_for_emit,
+    process_weights_for_netuid,
 )  # TODO: Replace when bittensor switches to numpy
 from template.mock import MockDendrite
 from template.utils.config import add_validator_args
@@ -59,7 +59,7 @@ class BaseValidatorNeuron(BaseNeuron):
         if self.config.mock:
             self.dendrite = MockDendrite(wallet=self.wallet)
         else:
-            self.dendrite = bt.dendrite(wallet=self.wallet)
+            self.dendrite = bt.Dendrite(wallet=self.wallet)
         bt.logging.info(f"Dendrite: {self.dendrite}")
 
         # Set up initial scoring weights for validation
@@ -89,7 +89,7 @@ class BaseValidatorNeuron(BaseNeuron):
 
         bt.logging.info("serving ip to chain...")
         try:
-            self.axon = bt.axon(wallet=self.wallet, config=self.config)
+            self.axon = bt.Axon(wallet=self.wallet, config=self.config)
 
             try:
                 self.subtensor.serve_axon(
@@ -227,7 +227,7 @@ class BaseValidatorNeuron(BaseNeuron):
         # Check if self.scores contains any NaN values and log a warning if it does.
         if np.isnan(self.scores).any():
             bt.logging.warning(
-                f"Scores contain NaN values. This may be due to a lack of responses from miners, or a bug in your reward functions."
+                "Scores contain NaN values. This may be due to a lack of responses from miners, or a bug in your reward functions."
             )
 
         # Calculate the average reward for each uid across non-zero values.

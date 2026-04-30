@@ -17,21 +17,24 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+from typing import Any, List, Union
+
 import bittensor as bt
-from typing import List, Optional, Union, Any, Dict
-from template.protocol import Dummy
 from bittensor.subnets import SubnetsAPI
+
+from template.protocol import Dummy
 
 
 class DummyAPI(SubnetsAPI):
-    def __init__(self, wallet: "bt.wallet"):
+    def __init__(self, wallet: "bt.Wallet"):
         super().__init__(wallet)
         self.netuid = 33
         self.name = "dummy"
 
     def prepare_synapse(self, dummy_input: int) -> Dummy:
-        synapse.dummy_input = dummy_input
-        return synapse
+        # Inherited template had `synapse.dummy_input = dummy_input` referencing
+        # an undefined `synapse`; fixed to construct it explicitly.
+        return Dummy(dummy_input=dummy_input)
 
     def process_responses(
         self, responses: List[Union["bt.Synapse", Any]]

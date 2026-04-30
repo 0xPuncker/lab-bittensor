@@ -1,41 +1,70 @@
-import time
-
 import asyncio
+import os
 import random
+import tempfile
+import time
+from typing import List
+
 import bittensor as bt
 
-from typing import List
+
+def MockWallet(config=None):  # noqa: N802 — PascalCase factory keeps drop-in compat
+    """Drop-in replacement for the removed bt.MockWallet (bittensor 10 dropped it).
+
+    Creates a bt.Wallet under a fixed temp dir with auto-generated keypairs.
+    Idempotent: subsequent calls reuse the existing keys. Never touches the
+    operator's real ~/.bittensor/wallets/.
+
+    The `config` argument is accepted for signature parity with the previous
+    bt.MockWallet(config=...) call site in template/base/neuron.py:82, but is
+    intentionally ignored — we always use a fixed test path.
+    """
+    path = os.path.join(tempfile.gettempdir(), "val-bittensor-mock-wallets")
+    os.makedirs(path, exist_ok=True)
+    wallet = bt.Wallet(name="mock", hotkey="mock", path=path)
+    wallet.create_if_non_existent(
+        coldkey_use_password=False,
+        hotkey_use_password=False,
+        suppress=True,
+    )
+    return wallet
 
 
 class MockSubtensor(bt.MockSubtensor):
     def __init__(self, netuid, n=16, wallet=None, network="mock"):
-        super().__init__(network=network)
+        # bittensor 10's MockSubtensor.__init__ accepts (*args, **kwargs) and
+        # ignores network. Pass nothing.
+        super().__init__()
 
-        if not self.subnet_exists(netuid):
-            self.create_subnet(netuid)
+        # Always create — bittensor 10's `subnet_exists` returns a MagicMock that
+        # is truthy by default, so the previous `if not self.subnet_exists(...)`
+        # gate skipped creation entirely. `create_subnet` is idempotent here.
+        self.create_subnet(netuid)
 
         # Register ourself (the validator) as a neuron at uid=0
         if wallet is not None:
             self.force_register_neuron(
                 netuid=netuid,
-                hotkey=wallet.hotkey.ss58_address,
-                coldkey=wallet.coldkey.ss58_address,
+                hotkey_ss58=wallet.hotkey.ss58_address,
+                coldkey_ss58=wallet.coldkey.ss58_address,
                 balance=100000,
                 stake=100000,
             )
 
-        # Register n mock neurons who will be miners
+        # Register n mock neurons who will be miners.
+        # bittensor 10 validates ss58 addresses; generate real ones via Keypair.
         for i in range(1, n + 1):
+            miner_kp = bt.Keypair.create_from_seed(f"0x{i:064x}")
             self.force_register_neuron(
                 netuid=netuid,
-                hotkey=f"miner-hotkey-{i}",
-                coldkey="mock-coldkey",
+                hotkey_ss58=miner_kp.ss58_address,
+                coldkey_ss58=miner_kp.ss58_address,  # same kp for both — mock doesn't care
                 balance=100000,
                 stake=100000,
             )
 
 
-class MockMetagraph(bt.metagraph):
+class MockMetagraph(bt.Metagraph):
     def __init__(self, netuid=1, network="mock", subtensor=None):
         super().__init__(netuid=netuid, network=network, sync=False)
 
@@ -51,7 +80,7 @@ class MockMetagraph(bt.metagraph):
         bt.logging.info(f"Axons: {self.axons}")
 
 
-class MockDendrite(bt.dendrite):
+class MockDendrite(bt.Dendrite):
     """
     Replaces a real bittensor network request with a mock request that just returns some static response for all axons that are passed and adds some random delay.
     """
@@ -61,7 +90,7 @@ class MockDendrite(bt.dendrite):
 
     async def forward(
         self,
-        axons: List[bt.axon],
+        axons: List[bt.Axon],
         synapse: bt.Synapse = bt.Synapse(),
         timeout: float = 12,
         deserialize: bool = True,
