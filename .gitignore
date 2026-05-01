@@ -180,3 +180,6 @@ wallets/
 
 # Virtual environments (project-specific override of the generic block above)
 val-bittensor-venv/
+
+# Local snapshot store for alpha-tao-economics history
+.data/
