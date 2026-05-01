@@ -93,6 +93,8 @@ kubectl describe pod -n val-bittensor val-bittensor-validator-0
 
 ## ArgoCD GitOps
 
+ArgoCD server: https://argocd.bifrostlabs.xyz/
+
 ### Register Application
 
 ```bash
@@ -105,7 +107,7 @@ The ArgoCD Application:
 - Prunes resources removed from Helm chart
 - Uses `values-image.yaml` for image tag (updated by CI)
 
-### Manual Sync
+### Manual Sync via kubectl
 
 ```bash
 # Trigger immediate sync
@@ -115,6 +117,24 @@ kubectl -n argocd patch application val-bittensor \
 # Check application status
 kubectl get application val-bittensor -n argocd -o yaml
 ```
+
+### Manual Sync via ArgoCD CLI
+
+```bash
+# Login to ArgoCD
+argocd login argocd.bifrostlabs.xyz --sso
+
+# Trigger sync
+argocd app sync val-bittensor
+
+# Get application status
+argocd app get val-bittensor
+```
+
+### Access ArgoCD UI
+
+Navigate to https://argocd.bifrostlabs.xyz/ to view the val-bittensor application,
+monitor deployment health, and trigger manual syncs.
 
 ## Environment Values
 
@@ -160,6 +180,28 @@ kubectl get configmap val-bittensor-strategy-config -n val-bittensor -o yaml
 
 # View strategy logs
 kubectl logs -n val-bittensor -l app.kubernetes.io/name=val-bittensor-strategy
+```
+
+### ArgoCD Sync Issues
+
+```bash
+# Check application health and sync status via CLI
+argocd app get val-bittensor --refresh
+
+# View application details
+argocd app manifest val-bittensor
+
+# Trigger hard refresh (reconcile)
+argocd app sync val-bittensor --refresh
+
+# Check for sync errors in ArgoCD UI
+# https://argocd.bifrostlabs.xyz/applications/val-bittensor
+```
+
+Common ArgoCD issues:
+- **Image tag not updating**: Check that `values-image.yaml` in helm-charts was updated by CI
+- **Sync failed with "manifest mismatch"**: Run `argocd app diff val-bittensor` to see what changed
+- **Application "OutOfSync"**: Auto-sync may be disabled; trigger manual sync via UI or CLI
 ```
 
 ## Upgrading
