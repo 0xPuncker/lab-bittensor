@@ -1,41 +1,55 @@
 # Kubernetes Deployment Guide
 
-This guide covers deploying val-bittensor to Kubernetes using Helm and ArgoCD.
+This guide covers deploying val-bittensor to Kubernetes.
 
 ## Prerequisites
 
-- Kubernetes cluster (e.g., EX44) with kubeconfig configured
-- Helm 3.x installed locally
+- Kubernetes cluster with kubeconfig configured
 - kubectl configured for target cluster
-- Access to ghcr.io/bifrostlabs/val-bittensor image
+- Access to ghcr.io/0xpuncker/val-bittensor image
+- Bittensor wallet with unencrypted keys (SDK doesn't support passwords in headless environments)
 
 ## Quick Start
 
-### 1. Create Namespace
+### 1. Deploy to Kubernetes
 
 ```bash
-kubectl create namespace val-bittensor
+# Deploy all resources
+./scripts/deploy-k8s.sh
+
+# Or manually:
+kubectl create namespace bittensor-testnet
+kubectl apply -f k8s/validator-statefulset.yaml
 ```
 
 ### 2. Seed Wallet Secret
 
-**IMPORTANT:** The wallet files MUST be unencrypted (no password). The Bittensor SDK does not support encrypted wallets in headless environments.
+The wallet files MUST be unencrypted. Copy from your local wallet:
 
 ```bash
-# From val-bittensor repo:
-./scripts/seed-wallet-secret.sh <wallet-name>
-
-# Dry-run to verify:
-./scripts/seed-wallet-secret.sh <wallet-name> --dry-run
-
-# Custom namespace:
-./scripts/seed-wallet-secret.sh <wallet-name> --namespace val-bittensor-prod
+# For testnet-validator wallet
+kubectl create secret generic val-bt-wallet -n bittensor-testnet \
+  --from-file=coldkey=/path/to/wallet/coldkey \
+  --from-file=coldkeypub.txt=/path/to/wallet/coldkeypub.txt \
+  --from-file=hotkey-default=/path/to/wallet/hotkeys/default
 ```
 
-The secret creates these keys:
-- `coldkey`: Private key for signing transactions
-- `coldkeypub.txt`: Public key for address derivation
-- `hotkey-<name>`: Each hotkey found in the wallet directory
+### 3. Configure Environment
+
+Edit `k8s/validator-statefulset.yaml` to configure:
+
+**Validator settings:**
+- `--wallet.name`: Your wallet name
+- `--wallet.hotkey`: Hotkey to use
+- `--netuid`: Subnet netuid (default: 1)
+- `--subtensor.network`: "test" or "finney"
+
+**Strategy settings (ConfigMap):**
+- `SCHEDULE_EVALUATOR_INTERVAL_HOURS`: How often to run evaluation (default: 6)
+- `SCHEDULE_SNAPSHOT_TIME`: When to take daily snapshot (default: "00:00")
+- `SCHEDULE_ECONOMICS_TIME`: When to run economics analysis (default: "01:00")
+- `SCHEDULE_DRY_RUN`: "true" for testing, "false" for production
+- `LOG_LEVEL`: "DEBUG" or "INFO"
 
 ### 3. Configure Values
 
@@ -91,28 +105,69 @@ kubectl logs -n val-bittensor val-bittensor-validator-0
 kubectl describe pod -n val-bittensor val-bittensor-validator-0
 ```
 
-## ArgoCD GitOps
+## CI/CD Pipeline
 
-ArgoCD server: https://argocd.bifrostlabs.xyz/
+The repository includes a GitHub Actions workflow (`.github/workflows/ci-cd.yaml`) that:
 
-### Register Application
+1. **Builds** the Docker image on push to `main` branch
+2. **Pushes** to `ghcr.io/0xpuncker/val-bittensor:<tag>`
+3. **Tags** images with: branch name, commit SHA, and `latest`
 
+**Manual workflow trigger:**
 ```bash
-kubectl apply -f ../helm-charts/argocd/applications/val-bittensor.yaml
+gh workflow run "Build and Push Docker Image"
 ```
 
-The ArgoCD Application:
-- Monitors `BifrostLabs/helm-charts` repository
-- Auto-syncs changes to `charts/val-bittensor`
-- Prunes resources removed from Helm chart
-- Uses `values-image.yaml` for image tag (updated by CI)
+**Monitor workflow:**
+```bash
+gh run list --workflow="ci-cd.yaml"
+gh run view <run-id> --log
+```
 
-### Manual Sync via kubectl
+## ArgoCD GitOps (Production)
+
+For production deployments, use ArgoCD for GitOps:
+
+### Prerequisites
+
+- ArgoCD installed in cluster
+- Cluster has network access to GitHub OR SSH keys configured
+- Repository accessible from cluster network
+
+### Setup
+
+**Option 1: Direct kubectl (Current - Development)**
+```bash
+kubectl apply -f k8s/validator-statefulset.yaml
+```
+
+**Option 2: ArgoCD (Production)**
+
+Configure ArgoCD with git credentials:
 
 ```bash
-# Trigger immediate sync
-kubectl -n argocd patch application val-bittensor \
-  --type merge -p '{"operation":{"sync":{}}}'
+# Create SSH key secret for ArgoCD
+kubectl create secret generic github-ssh-key -n argocd \
+  --from-file=sshPrivateKey=<path-to-private-key> \
+  --from-file=known_hosts=<path-to-known-hosts>
+
+# Update ArgoCD configmap
+kubectl patch configmap argocd-cm -n argocd --type merge -p '{
+  "data": {
+    "repo.credentials": "- url: git@github.com:0xPuncker/lab-tao.git\n  sshPrivateKeySecret:\n    name: github-ssh-key\n    namespace: argocd"
+  }
+}'
+```
+
+Apply the ArgoCD application:
+```bash
+kubectl apply -f k8s/argocd-application.yaml
+```
+
+**Note:** If the cluster cannot access GitHub directly, consider:
+- Using a git mirror accessible from the cluster network
+- Using ArgoCD's `argo exec` to manually sync
+- Direct kubectl deployment (current approach)
 
 # Check application status
 kubectl get application val-bittensor -n argocd -o yaml
