@@ -3,25 +3,15 @@ kind: Application
 metadata:
   name: val-bt
   namespace: argocd
+  annotations:
+    # We'll use this for future GitOps once helm-charts are ready
+    argocd.argoproj.io/sync-wave: "0"
 spec:
   project: default
   source:
-    repoURL: https://github.com/BifrostLabs/helm-charts.git
+    repoURL: https://github.com/0xPuncker/lab-tao.git
     targetRevision: main
-    path: charts/val-bittensor
-    helm:
-      valueFiles:
-        - values-image.yaml
-        - values-test.yaml
-      parameters:
-        - name: validator.wallet.name
-          value: "testnet-validator"
-        - name: validator.wallet.hotkey
-          value: "default"
-        - name: validator.subnet.netuid
-          value: "1"
-        - name: validator.subset.network
-          value: "test"
+    path: k8s
   destination:
     server: https://kubernetes.default.svc
     namespace: bittensor-testnet
