@@ -5,7 +5,7 @@
 [tool.ruff]
 line-length = 120
 target-version = "py310"
-src = ["template", "neurons", "tests"]
+src = ["template", "neurons", "strategy", "tests"]
 exclude = ["docs/stream_tutorial"]
 
 [tool.ruff.lint]
@@ -28,7 +28,7 @@ ignore = ["E501"]
 [tool.mypy]
 python_version = "3.10"
 ignore_missing_imports = true
-files = ["template", "neurons"]
+files = ["template", "neurons", "strategy"]
 # 28 errors live here today (Liskov violation in neurons/miner.py:46, several
 # attribute-error reports under bittensor's loosely-typed metagraph access).
 # This feature does NOT fix them — see "Out of scope" in spec.md. A future
