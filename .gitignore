@@ -183,3 +183,8 @@ val-bittensor-venv/
 
 # Local snapshot store for alpha-tao-economics history
 .data/
+
+# ADP — local pipeline state, feature specs, and skill artifacts (do not commit)
+.adp/
+.specs/
+.claude/skills/adp/
