@@ -6,3 +6,6 @@ pytest>=8
 torch>=2
 numpy>=1
 setuptools>=68      # bittensor 10.3.0 pins setuptools~=70.0; PYSEC-2025-49 ignored in pip-audit
+schedule>=1         # Strategy scheduler
+pyyaml>=6           # Strategy scheduler config
+kubernetes>=28      # K8s integration tests (env-gated)
