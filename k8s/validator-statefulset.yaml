@@ -1,0 +1,212 @@
+---
+# ServiceAccount
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: val-bt
+  namespace: bittensor-testnet
+
+---
+# ConfigMap for strategy scheduler
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: val-bt-strategy-config
+  namespace: bittensor-testnet
+data:
+  SCHEDULE_EVALUATOR_INTERVAL_HOURS: "6"
+  SCHEDULE_SNAPSHOT_TIME: "00:00"
+  SCHEDULE_ECONOMICS_TIME: "01:00"
+  SCHEDULE_DRY_RUN: "true"
+  LOG_LEVEL: "DEBUG"
+
+---
+# Validator StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: val-bt-validator
+  namespace: bittensor-testnet
+  labels:
+    app.kubernetes.io/name: val-bt
+    app.kubernetes.io/component: validator
+spec:
+  serviceName: val-bt-validator
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: val-bt
+      app.kubernetes.io/component: validator
+  updateStrategy:
+    type: OnDelete
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: val-bt
+        app.kubernetes.io/component: validator
+    spec:
+      serviceAccountName: val-bt
+      hostNetwork: true
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        fsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+      - name: validator
+        image: ghcr.io/0xpuncker/val-bittensor:latest
+        imagePullPolicy: IfNotPresent
+        command:
+          - python
+          - neurons/validator.py
+          - --wallet.name
+          - testnet-validator
+          - --hotkey
+          - default
+          - --netuid
+          - "1"
+          - --subtensor.network
+          - test
+        resources:
+          limits:
+            cpu: "1"
+            memory: 2Gi
+          requests:
+            cpu: 250m
+            memory: 512Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          runAsNonRoot: true
+          runAsUser: 1000
+        env:
+        - name: HOME
+          value: /home/valbittensor
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        livenessProbe:
+          exec:
+            command:
+              - pgrep
+              - -f
+              - python.*neurons/validator.py
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          successThreshold: 1
+          failureThreshold: 3
+        volumeMounts:
+        - name: wallet
+          mountPath: /home/valbittensor/.bittensor/wallets/testnet-validator/coldkey
+          subPath: coldkey
+          readOnly: true
+        - name: wallet
+          mountPath: /home/valbittensor/.bittensor/wallets/testnet-validator/coldkeypub.txt
+          subPath: coldkeypub.txt
+          readOnly: true
+        - name: wallet
+          mountPath: /home/valbittensor/.bittensor/wallets/testnet-validator/hotkeys/default
+          subPath: hotkey-default
+          readOnly: true
+        - name: state
+          mountPath: /home/valbittensor/.bittensor
+      volumes:
+      - name: wallet
+        secret:
+          secretName: val-bt-wallet
+  volumeClaimTemplates:
+  - metadata:
+      name: state
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 10Gi
+
+---
+# Strategy Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: val-bt-strategy
+  namespace: bittensor-testnet
+  labels:
+    app.kubernetes.io/name: val-bt
+    app.kubernetes.io/component: strategy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: val-bt
+      app.kubernetes.io/component: strategy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: val-bt
+        app.kubernetes.io/component: strategy
+    spec:
+      serviceAccountName: val-bt
+      securityContext:
+        fsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+      - name: strategy
+        image: ghcr.io/0xpuncker/val-bittensor:latest
+        imagePullPolicy: IfNotPresent
+        command:
+          - python
+          - strategy/scheduler.py
+        resources:
+          limits:
+            cpu: "1"
+            memory: 2Gi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          runAsNonRoot: true
+          runAsUser: 1000
+        env:
+        - name: HOME
+          value: /home/valbittensor
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: SCHEDULE_EVALUATOR_INTERVAL_HOURS
+          valueFrom:
+            configMapKeyRef:
+              name: val-bt-strategy-config
+              key: SCHEDULE_EVALUATOR_INTERVAL_HOURS
+        - name: SCHEDULE_SNAPSHOT_TIME
+          valueFrom:
+            configMapKeyRef:
+              name: val-bt-strategy-config
+              key: SCHEDULE_SNAPSHOT_TIME
+        - name: SCHEDULE_ECONOMICS_TIME
+          valueFrom:
+            configMapKeyRef:
+              name: val-bt-strategy-config
+              key: SCHEDULE_ECONOMICS_TIME
+        - name: SCHEDULE_DRY_RUN
+          valueFrom:
+            configMapKeyRef:
+              name: val-bt-strategy-config
+              key: SCHEDULE_DRY_RUN
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: val-bt-strategy-config
+              key: LOG_LEVEL
+        volumeMounts:
+        - name: data
+          mountPath: /home/valbittensor/data
+      volumes:
+      - name: data
+        emptyDir: {}

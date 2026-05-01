@@ -1,0 +1,39 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: val-bt
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/BifrostLabs/helm-charts.git
+    targetRevision: main
+    path: charts/val-bittensor
+    helm:
+      valueFiles:
+        - values-image.yaml
+        - values-test.yaml
+      parameters:
+        - name: validator.wallet.name
+          value: "testnet-validator"
+        - name: validator.wallet.hotkey
+          value: "default"
+        - name: validator.subnet.netuid
+          value: "1"
+        - name: validator.subset.network
+          value: "test"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: bittensor-testnet
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

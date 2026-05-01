@@ -22,11 +22,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy requirements files
 COPY setup.py .
 COPY requirements.txt .
+COPY README.md .
+
+# Copy template directory (needed for version in __init__.py)
+COPY template/ ./template/
+
+# Create requirements without torch (we'll install torch separately)
+RUN grep -v "^torch" requirements.txt > requirements-no-torch.txt
 
 # Install Python dependencies to a temporary location
-# This includes bittensor, torch (cpu-only), and strategy tool deps
+# Install torch cpu-only first, then other requirements (excluding torch)
 RUN pip install --no-cache-dir --prefix=/install torch --index-url https://download.pytorch.org/whl/cpu
-RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+RUN pip install --no-cache-dir --prefix=/install -r requirements-no-torch.txt
 RUN pip install --no-cache-dir --prefix=/install .
 
 # ─────────────────────────────────────────────────────────────────────────────
