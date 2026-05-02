@@ -10,7 +10,7 @@ on:
 
 env:
   IMAGE_REGISTRY: ghcr.io
-  IMAGE_REPO: ghcr.io/bifrostlabs/val-bittensor
+  IMAGE_REPO: ghcr.io/0xpuncker/val-bittensor
   PYTHON_VERSION: "3.11"
 
 jobs:
@@ -110,8 +110,8 @@ jobs:
           name: image-tag
           path: ${{ steps.tag.outputs.tag }}
 
-  update_helm_charts:
-    name: Update Helm Charts
+  update_k8s_manifests:
+    name: Update K8s Manifests
     runs-on: ubuntu-latest
     needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -129,25 +129,22 @@ jobs:
         run: |
           IMAGE_TAG=$(cat artifact/*)
           echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
+          # Extract short SHA for tag
+          SHORT_SHA="${GITHUB_SHA:0:7}"
+          echo "SHORT_SHA=${SHORT_SHA}" >> $GITHUB_ENV
 
-      - name: Checkout helm-charts
-        uses: actions/checkout@v4
-        with:
-          repository: BifrostLabs/helm-charts
-          token: ${{ secrets.HELM_CHARTS_TOKEN || secrets.GITHUB_TOKEN }}
-          path: helm-charts
-
-      - name: Update values-image.yaml
+      - name: Update K8s manifests
         run: |
-          cd helm-charts
-          TAG="${IMAGE_TAG##*:}"
-          yq eval ".image.tag = \"$TAG\"" -i charts/val-bittensor/values-image.yaml
+          echo "Updating K8s manifests to use image tag: ${SHORT_SHA}"
+          # Update validator-statefulset.yaml
+          sed -i "s|image: ghcr.io/0xpuncker/val-bittensor:.*|image: ghcr.io/0xpuncker/val-bittensor:${SHORT_SHA}|g" k8s/validator-statefulset.yaml
+          # Show the changes
+          git diff k8s/validator-statefulset.yaml
 
-      - name: Commit and push to helm-charts
+      - name: Commit and push K8s manifest update
         run: |
-          cd helm-charts
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add charts/val-bittensor/values-image.yaml
-          git diff --staged --quiet || git commit -m "ci(val-bittensor): update image tag to ${{ env.IMAGE_TAG }}"
+          git add k8s/validator-statefulset.yaml
+          git diff --staged --quiet || git commit -m "chore(k8s): update image tag to ${SHORT_SHA} [ci skip]"
           git push
