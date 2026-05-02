@@ -3,7 +3,7 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: val-bt
+  name: bt
   namespace: bittensor-testnet
 
 ---
@@ -11,7 +11,7 @@ metadata:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: val-bt-strategy-config
+  name: bt-strategy-config
   namespace: bittensor-testnet
 data:
   SCHEDULE_EVALUATOR_INTERVAL_HOURS: "6"
@@ -25,28 +25,28 @@ data:
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: val-bt-validator
+  name: bt-validator
   namespace: bittensor-testnet
   labels:
-    app.kubernetes.io/name: val-bt
+    app.kubernetes.io/name: bt
     app.kubernetes.io/component: validator
 spec:
-  serviceName: val-bt-validator
+  serviceName: bt-validator
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: val-bt
+      app.kubernetes.io/name: bt
       app.kubernetes.io/component: validator
   updateStrategy:
     type: OnDelete
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: val-bt
+        app.kubernetes.io/name: bt
         app.kubernetes.io/component: validator
     spec:
-      serviceAccountName: val-bt
-      hostNetwork: true
+      serviceAccountName: bt
+      hostNetwork: false
       terminationGracePeriodSeconds: 60
       securityContext:
         fsGroup: 1000
@@ -67,13 +67,15 @@ spec:
           - "1"
           - --subtensor.network
           - test
+          - --axon.port
+          - "8091"
         resources:
           limits:
-            cpu: "1"
-            memory: 2Gi
+            cpu: "2"
+            memory: 4Gi
           requests:
-            cpu: 250m
-            memory: 512Mi
+            cpu: 500m
+            memory: 1Gi
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
@@ -83,10 +85,25 @@ spec:
           runAsUser: 1000
         env:
         - name: HOME
-          value: /home/valbittensor
+          value: /home/bt
         - name: PYTHONUNBUFFERED
           value: "1"
+        - name: BT_SUBTENSOR_NETWORK
+          value: test
+        - name: BT_NETUID
+          value: "1"
         livenessProbe:
+          exec:
+            command:
+              - pgrep
+              - -f
+              - python.*neurons/validator.py
+          initialDelaySeconds: 120
+          periodSeconds: 60
+          timeoutSeconds: 30
+          successThreshold: 1
+          failureThreshold: 3
+        readinessProbe:
           exec:
             command:
               - pgrep
@@ -99,23 +116,23 @@ spec:
           failureThreshold: 3
         volumeMounts:
         - name: wallet
-          mountPath: /home/valbittensor/.bittensor/wallets/testnet-validator/coldkey
+          mountPath: /home/bt/.bittensor/wallets/testnet-validator/coldkey
           subPath: coldkey
           readOnly: true
         - name: wallet
-          mountPath: /home/valbittensor/.bittensor/wallets/testnet-validator/coldkeypub.txt
+          mountPath: /home/bt/.bittensor/wallets/testnet-validator/coldkeypub.txt
           subPath: coldkeypub.txt
           readOnly: true
         - name: wallet
-          mountPath: /home/valbittensor/.bittensor/wallets/testnet-validator/hotkeys/default
+          mountPath: /home/bt/.bittensor/wallets/testnet-validator/hotkeys/default
           subPath: hotkey-default
           readOnly: true
         - name: state
-          mountPath: /home/valbittensor/.bittensor
+          mountPath: /home/bt/.bittensor
       volumes:
       - name: wallet
         secret:
-          secretName: val-bt-wallet
+          secretName: bt-wallet
   volumeClaimTemplates:
   - metadata:
       name: state
@@ -131,24 +148,24 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: val-bt-strategy
+  name: bt-strategy
   namespace: bittensor-testnet
   labels:
-    app.kubernetes.io/name: val-bt
+    app.kubernetes.io/name: bt
     app.kubernetes.io/component: strategy
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: val-bt
+      app.kubernetes.io/name: bt
       app.kubernetes.io/component: strategy
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: val-bt
+        app.kubernetes.io/name: bt
         app.kubernetes.io/component: strategy
     spec:
-      serviceAccountName: val-bt
+      serviceAccountName: bt
       securityContext:
         fsGroup: 1000
         runAsNonRoot: true
@@ -162,6 +179,8 @@ spec:
           - strategy/scheduler.py
           - --netuid
           - "1"
+          - --axon.port
+          - "8091"
         resources:
           limits:
             cpu: "1"
@@ -178,37 +197,63 @@ spec:
           runAsUser: 1000
         env:
         - name: HOME
-          value: /home/valbittensor
+          value: /home/bt
         - name: PYTHONUNBUFFERED
           value: "1"
         - name: SCHEDULE_EVALUATOR_INTERVAL_HOURS
           valueFrom:
             configMapKeyRef:
-              name: val-bt-strategy-config
+              name: bt-strategy-config
               key: SCHEDULE_EVALUATOR_INTERVAL_HOURS
         - name: SCHEDULE_SNAPSHOT_TIME
           valueFrom:
             configMapKeyRef:
-              name: val-bt-strategy-config
+              name: bt-strategy-config
               key: SCHEDULE_SNAPSHOT_TIME
         - name: SCHEDULE_ECONOMICS_TIME
           valueFrom:
             configMapKeyRef:
-              name: val-bt-strategy-config
+              name: bt-strategy-config
               key: SCHEDULE_ECONOMICS_TIME
         - name: SCHEDULE_DRY_RUN
           valueFrom:
             configMapKeyRef:
-              name: val-bt-strategy-config
+              name: bt-strategy-config
               key: SCHEDULE_DRY_RUN
         - name: LOG_LEVEL
           valueFrom:
             configMapKeyRef:
-              name: val-bt-strategy-config
+              name: bt-strategy-config
               key: LOG_LEVEL
+        - name: BT_SUBTENSOR_NETWORK
+          value: test
+        - name: BT_NETUID
+          value: "1"
+        livenessProbe:
+          exec:
+            command:
+              - pgrep
+              -f
+              - python.*strategy/scheduler.py
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          successThreshold: 1
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+              - pgrep
+              -f
+              - python.*strategy/scheduler.py
+          initialDelaySeconds: 15
+          periodSeconds: 15
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
         volumeMounts:
         - name: data
-          mountPath: /home/valbittensor/data
+          mountPath: /home/bt/data
       volumes:
       - name: data
         emptyDir: {}
