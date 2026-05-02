@@ -179,8 +179,6 @@ spec:
           - strategy/scheduler.py
           - --netuid
           - "1"
-          - --axon.port
-          - "8091"
         resources:
           limits:
             cpu: "1"

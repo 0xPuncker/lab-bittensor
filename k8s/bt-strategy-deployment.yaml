@@ -1,0 +1,110 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bt-strategy
+  namespace: bittensor-testnet
+  labels:
+    app.kubernetes.io/name: bt
+    app.kubernetes.io/component: strategy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: bt
+      app.kubernetes.io/component: strategy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: bt
+        app.kubernetes.io/component: strategy
+    spec:
+      serviceAccountName: bt
+      securityContext:
+        fsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+      - name: strategy
+        image: ghcr.io/0xpuncker/val-bittensor:latest
+        imagePullPolicy: Always
+        command:
+          - python
+          - strategy/scheduler.py
+          - --netuid
+          - "1"
+        resources:
+          limits:
+            cpu: "1"
+            memory: 2Gi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          runAsNonRoot: true
+          runAsUser: 1000
+        env:
+        - name: HOME
+          value: /home/bt
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: SCHEDULE_EVALUATOR_INTERVAL_HOURS
+          valueFrom:
+            configMapKeyRef:
+              name: bt-strategy-config
+              key: SCHEDULE_EVALUATOR_INTERVAL_HOURS
+        - name: SCHEDULE_SNAPSHOT_TIME
+          valueFrom:
+            configMapKeyRef:
+              name: bt-strategy-config
+              key: SCHEDULE_SNAPSHOT_TIME
+        - name: SCHEDULE_ECONOMICS_TIME
+          valueFrom:
+            configMapKeyRef:
+              name: bt-strategy-config
+              key: SCHEDULE_ECONOMICS_TIME
+        - name: SCHEDULE_DRY_RUN
+          valueFrom:
+            configMapKeyRef:
+              name: bt-strategy-config
+              key: SCHEDULE_DRY_RUN
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: bt-strategy-config
+              key: LOG_LEVEL
+        - name: BT_SUBTENSOR_NETWORK
+          value: test
+        - name: BT_NETUID
+          value: "1"
+        livenessProbe:
+          exec:
+            command:
+              - pgrep
+              -f
+              - python.*strategy/scheduler.py
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          successThreshold: 1
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+              - pgrep
+              -f
+              - python.*strategy/scheduler.py
+          initialDelaySeconds: 15
+          periodSeconds: 15
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        volumeMounts:
+        - name: data
+          mountPath: /home/bt/data
+      volumes:
+      - name: data
+        emptyDir: {}
