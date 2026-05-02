@@ -109,22 +109,25 @@ jobs:
       - name: Extract image tag
         id: tag
         run: |
-          TAG="${{ steps.meta.outputs.tags }}"
-          # Get first tag (sha tag)
-          IMAGE_TAG=$(echo "$TAG" | tr ' ' '\n' | head -n1)
+          # docker/metadata-action outputs newline-separated tags; grab the sha tag (first line)
+          IMAGE_TAG=$(printf '%s' "${{ steps.meta.outputs.tags }}" | head -n1)
           echo "tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+          # Write to a file so it can be uploaded as an artifact
+          echo "${IMAGE_TAG}" > /tmp/image-tag.txt
 
       - name: Upload image tag artifact
         uses: actions/upload-artifact@v4
         with:
           name: image-tag
-          path: ${{ steps.tag.outputs.tag }}
+          path: /tmp/image-tag.txt
 
   update_k8s_manifests:
     name: Update K8s Manifests
     runs-on: ubuntu-latest
     needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
     steps:
       - name: Checkout val-bittensor
         uses: actions/checkout@v4
@@ -137,18 +140,17 @@ jobs:
 
       - name: Set IMAGE_TAG env
         run: |
-          IMAGE_TAG=$(cat artifact/*)
+          # artifact contains the full image reference, e.g. ghcr.io/0xpuncker/val-bittensor:main-abc1234
+          IMAGE_TAG=$(cat artifact/image-tag.txt)
           echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
-          # Extract short SHA for tag
           SHORT_SHA="${GITHUB_SHA:0:7}"
           echo "SHORT_SHA=${SHORT_SHA}" >> $GITHUB_ENV
 
       - name: Update K8s manifests
         run: |
-          echo "Updating K8s manifests to use image tag: ${SHORT_SHA}"
-          # Update bittensor-testnet.yaml
-          sed -i "s|image: ghcr.io/0xpuncker/val-bittensor:.*|image: ghcr.io/0xpuncker/val-bittensor:${SHORT_SHA}|g" k8s/bittensor-testnet.yaml
-          # Show the changes
+          echo "Updating K8s manifests to use image: ${IMAGE_TAG}"
+          # Use the full IMAGE_TAG (includes branch prefix, e.g. main-abc1234) to match what was pushed
+          sed -i "s|image: ghcr.io/0xpuncker/val-bittensor:.*|image: ${IMAGE_TAG}|g" k8s/bittensor-testnet.yaml
           git diff k8s/bittensor-testnet.yaml
 
       - name: Commit and push K8s manifest update

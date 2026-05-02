@@ -21,6 +21,23 @@ data:
   LOG_LEVEL: "DEBUG"
 
 ---
+# Headless Service required by the StatefulSet for stable pod DNS
+apiVersion: v1
+kind: Service
+metadata:
+  name: bt-validator
+  namespace: bittensor-testnet
+  labels:
+    app.kubernetes.io/name: bt
+    app.kubernetes.io/component: validator
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: bt
+    app.kubernetes.io/component: validator
+  ports: []
+
+---
 # Validator StatefulSet
 apiVersion: apps/v1
 kind: StatefulSet
@@ -85,7 +102,7 @@ spec:
           runAsUser: 1000
         env:
         - name: HOME
-          value: /home/bt
+          value: /home/valbittensor
         - name: PYTHONUNBUFFERED
           value: "1"
         - name: BT_SUBTENSOR_NETWORK
@@ -116,19 +133,19 @@ spec:
           failureThreshold: 3
         volumeMounts:
         - name: wallet
-          mountPath: /home/bt/.bittensor/wallets/testnet-validator/coldkey
+          mountPath: /home/valbittensor/.bittensor/wallets/testnet-validator/coldkey
           subPath: coldkey
           readOnly: true
         - name: wallet
-          mountPath: /home/bt/.bittensor/wallets/testnet-validator/coldkeypub.txt
+          mountPath: /home/valbittensor/.bittensor/wallets/testnet-validator/coldkeypub.txt
           subPath: coldkeypub.txt
           readOnly: true
         - name: wallet
-          mountPath: /home/bt/.bittensor/wallets/testnet-validator/hotkeys/default
+          mountPath: /home/valbittensor/.bittensor/wallets/testnet-validator/hotkeys/default
           subPath: hotkey-default
           readOnly: true
         - name: state
-          mountPath: /home/bt/.bittensor
+          mountPath: /home/valbittensor/.bittensor
       volumes:
       - name: wallet
         secret:
@@ -195,7 +212,7 @@ spec:
           runAsUser: 1000
         env:
         - name: HOME
-          value: /home/bt
+          value: /home/valbittensor
         - name: PYTHONUNBUFFERED
           value: "1"
         - name: SCHEDULE_EVALUATOR_INTERVAL_HOURS
@@ -251,7 +268,7 @@ spec:
           failureThreshold: 3
         volumeMounts:
         - name: data
-          mountPath: /home/bt/data
+          mountPath: /home/valbittensor/data
       volumes:
       - name: data
         emptyDir: {}
