@@ -59,6 +59,8 @@ with codecs.open(
     version_match = re.search(
         r"^__version__ = ['\"]([^'\"]*)['\"]", init_file.read(), re.M
     )
+    if version_match is None:
+        raise RuntimeError("Unable to find version string.")
     version_string = version_match.group(1)
 
 setup(

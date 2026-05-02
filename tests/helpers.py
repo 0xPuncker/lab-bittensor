@@ -51,9 +51,11 @@ class CLOSE_IN_VALUE:
         self.value = value
         self.tolerance = tolerance
 
-    def __eq__(self, __o: Union[float, int, Balance]) -> bool:
+    def __eq__(self, __o: object) -> bool:
         # True if __o \in [value - tolerance, value + tolerance]
         # or if value \in [__o - tolerance, __o + tolerance]
+        if not isinstance(__o, (float, int, Balance)):
+            return False
         return (
             (self.value - self.tolerance) <= __o
             and __o <= (self.value + self.tolerance)
