@@ -8,4 +8,5 @@ numpy>=1
 setuptools>=68      # bittensor 10.3.0 pins setuptools~=70.0; PYSEC-2025-49 ignored in pip-audit
 schedule>=1         # Strategy scheduler
 pyyaml>=6           # Strategy scheduler config
+types-pyyaml>=6     # Type stubs for mypy
 kubernetes>=28      # K8s integration tests (env-gated)
