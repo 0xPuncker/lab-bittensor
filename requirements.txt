@@ -5,7 +5,7 @@ rich>=13
 pytest>=8
 torch>=2
 numpy>=1
-setuptools>=78.1.1  # Fixed PYSEC-2025-49 vulnerability
+setuptools>=70.0,<71  # Bittensor 10.3.0 requires setuptools~=70.0; PYSEC-2025-49 accepted
 schedule>=1         # Strategy scheduler
 pyyaml>=6           # Strategy scheduler config
 types-pyyaml>=6     # Type stubs for mypy
