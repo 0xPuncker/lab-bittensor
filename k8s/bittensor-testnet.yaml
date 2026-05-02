@@ -175,10 +175,10 @@ spec:
         image: ghcr.io/0xpuncker/val-bittensor:latest
         imagePullPolicy: Always
         command:
-          - python
-          - strategy/scheduler.py
-          - --netuid
-          - "1"
+        - python
+        - strategy/scheduler.py
+        - --netuid
+        - "1"
         resources:
           limits:
             cpu: "1"
@@ -230,9 +230,9 @@ spec:
         livenessProbe:
           exec:
             command:
-              - pgrep
-              -f
-              - python.*strategy/scheduler.py
+            - pgrep
+            - -f
+            - python.*strategy/scheduler.py
           initialDelaySeconds: 30
           periodSeconds: 30
           timeoutSeconds: 10
@@ -241,9 +241,9 @@ spec:
         readinessProbe:
           exec:
             command:
-              - pgrep
-              -f
-              - python.*strategy/scheduler.py
+            - pgrep
+            - -f
+            - python.*strategy/scheduler.py
           initialDelaySeconds: 15
           periodSeconds: 15
           timeoutSeconds: 5
