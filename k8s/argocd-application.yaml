@@ -4,12 +4,11 @@ metadata:
   name: val-bt
   namespace: argocd
   annotations:
-    # We'll use this for future GitOps once helm-charts are ready
     argocd.argoproj.io/sync-wave: "0"
 spec:
   project: default
   source:
-    repoURL: https://github.com/0xPuncker/lab-tao.git
+    repoURL: https://github.com/0xPuncker/val-bittensor.git
     targetRevision: main
     path: k8s
   destination:
@@ -19,11 +18,18 @@ spec:
     automated:
       prune: true
       selfHeal: true
+      allowEmpty: false
     syncOptions:
       - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
     retry:
       limit: 5
       backoff:
         duration: 5s
         factor: 2
         maxDuration: 3m
+  ignoreDifferences:
+    - group: apps
+      kind: StatefulSet
+      jsonPointers:
+        - /spec/template/metadata/annotations/kubectl.kubernetes.io/restartedAt

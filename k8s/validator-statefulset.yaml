@@ -55,7 +55,7 @@ spec:
       containers:
       - name: validator
         image: ghcr.io/0xpuncker/val-bittensor:latest
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         command:
           - python
           - neurons/validator.py
@@ -156,10 +156,12 @@ spec:
       containers:
       - name: strategy
         image: ghcr.io/0xpuncker/val-bittensor:latest
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         command:
           - python
           - strategy/scheduler.py
+          - --netuid
+          - "1"
         resources:
           limits:
             cpu: "1"
