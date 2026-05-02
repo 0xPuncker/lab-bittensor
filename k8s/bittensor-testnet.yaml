@@ -161,6 +161,21 @@ spec:
           storage: 10Gi
 
 ---
+# PVC for strategy alpha_history.db — survives pod restarts.
+# alpha_snapshot.py writes to .data/alpha_history.db relative to /app CWD.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: bt-strategy-data
+  namespace: bittensor-testnet
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+---
 # Strategy Deployment
 apiVersion: apps/v1
 kind: Deployment
@@ -268,7 +283,8 @@ spec:
           failureThreshold: 3
         volumeMounts:
         - name: data
-          mountPath: /home/valbittensor/data
+          mountPath: /app/.data
       volumes:
       - name: data
-        emptyDir: {}
+        persistentVolumeClaim:
+          claimName: bt-strategy-data
