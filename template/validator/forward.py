@@ -75,4 +75,7 @@ async def forward(self):
     )
     # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
     self.update_scores(rewards, miner_uids)
-    time.sleep(5)
+
+    # Back off longer when no miners respond to avoid log spam; normal cadence otherwise.
+    step_interval = 120 if non_null == 0 else 5
+    time.sleep(step_interval)
