@@ -237,6 +237,13 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # Check if the norm is zero or contains NaN values
         if np.any(norm == 0) or np.isnan(norm).any():
+            non_zero_count = int(np.count_nonzero(self.scores))
+            bt.logging.warning(
+                f"Score norm is zero (non-zero scores: {non_zero_count}/{len(self.scores)}). "
+                "This means no miner earned a reward this epoch — likely because no miner "
+                "on this subnet implements the queried protocol. "
+                "Weights will fall back to uniform (all ones) via process_weights_for_netuid."
+            )
             norm = np.ones_like(norm)  # Avoid division by zero or NaN
 
         # Compute raw_weights safely

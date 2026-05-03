@@ -51,14 +51,28 @@ async def forward(self):
         deserialize=True,
     )
 
-    # Log the results for monitoring purposes.
-    bt.logging.info(f"Received responses: {responses}")
+    # Log response quality: how many miners answered vs timed out.
+    non_null = sum(1 for r in responses if r is not None)
+    bt.logging.info(
+        f"Queried {len(miner_uids)} miners (uids={miner_uids.tolist()}): "
+        f"{non_null} responded, {len(responses) - non_null} timed out / no axon"
+    )
+    if non_null == 0:
+        bt.logging.warning(
+            "All miners timed out or returned None — no miner on this subnet "
+            "implements the Dummy protocol. Scores remain zero; weights will "
+            "be set uniformly this epoch. This is expected for a template "
+            "validator on a subnet using a different protocol."
+        )
 
     # TODO(developer): Define how the validator scores responses.
     # Adjust the scores based on responses from miners.
     rewards = get_rewards(self, query=self.step, responses=responses)
 
-    bt.logging.info(f"Scored responses: {rewards}")
+    correct = int((rewards == 1.0).sum())
+    bt.logging.info(
+        f"Rewards: {correct}/{len(rewards)} correct (expected response = query*2={self.step * 2})"
+    )
     # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
     self.update_scores(rewards, miner_uids)
     time.sleep(5)
