@@ -184,6 +184,9 @@ val-bittensor-venv/
 # Local snapshot store for alpha-tao-economics history
 .data/
 
+# K8s
+k8s/argocd.exe
+
 # ADP — local pipeline state, feature specs, and skill artifacts (do not commit)
 .adp/
 .specs/
