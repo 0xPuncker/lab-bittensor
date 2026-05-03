@@ -1,18 +1,20 @@
 """
 Kubernetes deployment integration tests.
 
-These tests validate that the val-bittensor Helm chart deploys correctly
-to a real Kubernetes cluster. They are gated by the BT_RUN_K8S_TESTS
-environment variable to avoid requiring cluster access in CI.
+Validates that `k8s/bittensor-testnet.yaml` raw manifests are applied correctly
+to the `bittensor-testnet` namespace. All tests are gated by BT_RUN_K8S_TESTS=1
+to avoid requiring cluster access in CI.
 
 Run with:
     BT_RUN_K8S_TESTS=1 pytest tests/integration/test_k8s_deployment.py -v
 
 Prerequisites:
     - kubectl configured for target cluster
-    - Helm chart installed in cluster
-    - val-bittensor namespace exists
+    - ArgoCD has synced k8s/bittensor-testnet.yaml (or manual kubectl apply)
+    - bt-wallet secret exists in bittensor-testnet namespace
 """
+
+from __future__ import annotations
 
 import os
 import subprocess
@@ -22,31 +24,32 @@ import pytest
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 
-# Skip all tests if env var not set
 pytestmark = pytest.mark.skipif(
     os.getenv("BT_RUN_K8S_TESTS") != "1",
     reason="BT_RUN_K8S_TESTS=1 required for K8s integration tests",
 )
 
-NAMESPACE = "val-bittensor"
-RELEASE_NAME = "val-bittensor"
+# Matches k8s/bittensor-testnet.yaml resource names exactly
+NAMESPACE = "bittensor-testnet"
+STATEFULSET_NAME = "bt-validator"
+DEPLOYMENT_NAME = "bt-strategy"
+CONFIGMAP_NAME = "bt-strategy-config"
+SERVICE_ACCOUNT = "bt"
+WALLET_SECRET = "bt-wallet"
 TIMEOUT_SECONDS = 300
 
 
 @pytest.fixture(scope="module")
 def kube_api() -> client.CoreV1Api:
-    """Load kubeconfig and return CoreV1Api client."""
     try:
         config.load_kube_config()
     except Exception:
-        # Fall back to in-cluster config if running inside a pod
         config.load_incluster_config()
     return client.CoreV1Api()
 
 
 @pytest.fixture(scope="module")
 def apps_api() -> client.AppsV1Api:
-    """Load kubeconfig and return AppsV1Api client."""
     try:
         config.load_kube_config()
     except Exception:
@@ -54,27 +57,11 @@ def apps_api() -> client.AppsV1Api:
     return client.AppsV1Api()
 
 
-@pytest.fixture(scope="module")
-def helm_installed() -> bool:
-    """Check if Helm release is installed."""
-    try:
-        result = subprocess.run(
-            ["helm", "status", RELEASE_NAME, "-n", NAMESPACE],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        return result.returncode == 0
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        return False
-
-
 def wait_for_pod_ready(
     api: client.CoreV1Api,
     name: str,
     timeout: int = TIMEOUT_SECONDS,
 ) -> bool:
-    """Wait for a pod to be Ready."""
     start = time.time()
     while time.time() - start < timeout:
         try:
@@ -89,157 +76,144 @@ def wait_for_pod_ready(
     return False
 
 
-class TestValidatorDeployment:
-    """Test validator StatefulSet deployment."""
+class TestNamespace:
+    def test_namespace_exists(self, kube_api: client.CoreV1Api) -> None:
+        ns = kube_api.read_namespace(NAMESPACE)
+        assert ns is not None
 
+    def test_serviceaccount_exists(self, kube_api: client.CoreV1Api) -> None:
+        sa = kube_api.read_namespaced_service_account(SERVICE_ACCOUNT, NAMESPACE)
+        assert sa is not None
+
+
+class TestValidatorDeployment:
     def test_statefulset_exists(self, apps_api: client.AppsV1Api) -> None:
-        """Validator StatefulSet should exist."""
-        try:
-            sts = apps_api.read_namespaced_stateful_set(
-                f"{RELEASE_NAME}-validator", NAMESPACE
-            )
-            assert sts is not None
-            assert sts.spec.replicas == 1
-        except ApiException as e:
-            pytest.fail(f"StatefulSet not found: {e}")
+        sts = apps_api.read_namespaced_stateful_set(STATEFULSET_NAME, NAMESPACE)
+        assert sts is not None
+        assert sts.spec.replicas == 1
+
+    def test_headless_service_exists(self, kube_api: client.CoreV1Api) -> None:
+        svc = kube_api.read_namespaced_service(STATEFULSET_NAME, NAMESPACE)
+        assert svc is not None
+        assert svc.spec.cluster_ip == "None"
 
     def test_validator_pod_running(
-        self, kube_api: client.CoreV1Api, apps_api: client.AppsV1Api
-    ) -> None:
-        """Validator pod should be running and ready."""
-        try:
-            # Get StatefulSet pods
-            pods = kube_api.list_namespaced_pod(
-                NAMESPACE,
-                label_selector=f"app.kubernetes.io/name={RELEASE_NAME}-validator",
-            )
-            assert len(pods.items) > 0, "No validator pods found"
-
-            pod_name = pods.items[0].metadata.name
-            assert wait_for_pod_ready(kube_api, pod_name), f"Pod {pod_name} not ready"
-        except ApiException as e:
-            pytest.fail(f"Failed to query pods: {e}")
-
-    def test_wallet_secret_mounted(
         self, kube_api: client.CoreV1Api
     ) -> None:
-        """Wallet secret should be mounted correctly."""
-        try:
-            pods = kube_api.list_namespaced_pod(
-                NAMESPACE,
-                label_selector=f"app.kubernetes.io/name={RELEASE_NAME}-validator",
-            )
-            if not pods.items:
-                pytest.skip("No validator pods found")
-                return
+        pods = kube_api.list_namespaced_pod(
+            NAMESPACE,
+            label_selector="app.kubernetes.io/name=bt,app.kubernetes.io/component=validator",
+        )
+        assert len(pods.items) > 0, "No validator pods found"
+        pod_name = pods.items[0].metadata.name
+        assert wait_for_pod_ready(kube_api, pod_name), f"Pod {pod_name} not ready"
 
-            pod = pods.items[0]
-            wallet_volumes = [
-                v for v in pod.spec.volumes if v.name == "wallet"
-            ]
-            assert len(wallet_volumes) == 1, "Wallet volume not found"
+    def test_wallet_secret_mounted(self, kube_api: client.CoreV1Api) -> None:
+        pods = kube_api.list_namespaced_pod(
+            NAMESPACE,
+            label_selector="app.kubernetes.io/name=bt,app.kubernetes.io/component=validator",
+        )
+        if not pods.items:
+            pytest.skip("No validator pods found")
+        pod = pods.items[0]
+        wallet_vols = [v for v in pod.spec.volumes if v.name == "wallet"]
+        assert len(wallet_vols) == 1, "Wallet volume not found"
+        assert wallet_vols[0].secret is not None, "Wallet not from Secret"
+        assert wallet_vols[0].secret.secret_name == WALLET_SECRET
 
-            # Check secret reference
-            assert wallet_volumes[0].secret is not None, "Wallet not from Secret"
-            assert wallet_volumes[0].secret.secret_name.endswith("wallet")
-        except ApiException as e:
-            pytest.fail(f"Failed to query pod: {e}")
+    def test_state_pvc_bound(self, kube_api: client.CoreV1Api) -> None:
+        pvcs = kube_api.list_namespaced_persistent_volume_claim(
+            NAMESPACE,
+            label_selector="app.kubernetes.io/name=bt",
+        )
+        state_pvcs = [p for p in pvcs.items if "state" in p.metadata.name]
+        assert len(state_pvcs) >= 1, "No state PVC found for validator"
+        for pvc in state_pvcs:
+            assert pvc.status.phase == "Bound", f"PVC {pvc.metadata.name} not Bound"
 
-    def test_validator_logs_connected(self, kube_api: client.CoreV1Api) -> None:
-        """Validator logs should show connection to testnet."""
-        try:
-            pods = kube_api.list_namespaced_pod(
-                NAMESPACE,
-                label_selector=f"app.kubernetes.io/name={RELEASE_NAME}-validator",
-            )
-            if not pods.items:
-                pytest.skip("No validator pods found")
-                return
-
-            pod_name = pods.items[0].metadata.name
-            logs = kube_api.read_namespaced_pod_log(
-                pod_name, NAMESPACE, tail_lines=100
-            )
-
-            # Look for testnet connection indicators
-            # (exact string depends on Bittensor SDK output)
-            assert len(logs) > 0, "No logs found"
-            # Could check for specific patterns like "test" or "finney"
-        except ApiException as e:
-            pytest.fail(f"Failed to fetch logs: {e}")
+    def test_validator_logs_present(self, kube_api: client.CoreV1Api) -> None:
+        pods = kube_api.list_namespaced_pod(
+            NAMESPACE,
+            label_selector="app.kubernetes.io/name=bt,app.kubernetes.io/component=validator",
+        )
+        if not pods.items:
+            pytest.skip("No validator pods found")
+        pod_name = pods.items[0].metadata.name
+        logs = kube_api.read_namespaced_pod_log(pod_name, NAMESPACE, tail_lines=50)
+        assert len(logs) > 0, "No logs from validator pod"
 
 
 class TestStrategyDeployment:
-    """Test strategy service Deployment."""
-
     def test_strategy_deployment_exists(self, apps_api: client.AppsV1Api) -> None:
-        """Strategy Deployment should exist if enabled."""
         try:
-            deployment = apps_api.read_namespaced_deployment(
-                f"{RELEASE_NAME}-strategy", NAMESPACE
-            )
-            assert deployment is not None
+            dep = apps_api.read_namespaced_deployment(DEPLOYMENT_NAME, NAMESPACE)
+            assert dep is not None
         except ApiException as e:
             if e.status == 404:
-                pytest.skip("Strategy deployment not enabled")
-            else:
-                raise
+                pytest.skip("Strategy deployment not found")
+            raise
 
     def test_strategy_configmap_exists(self, kube_api: client.CoreV1Api) -> None:
-        """Strategy ConfigMap should exist."""
+        cm = kube_api.read_namespaced_config_map(CONFIGMAP_NAME, NAMESPACE)
+        assert cm is not None
+        # ConfigMap carries env vars for the scheduler
+        assert "SCHEDULE_EVALUATOR_INTERVAL_HOURS" in cm.data
+        assert "SCHEDULE_SNAPSHOT_TIME" in cm.data
+        assert "SCHEDULE_DRY_RUN" in cm.data
+
+    def test_strategy_data_pvc_bound(self, kube_api: client.CoreV1Api) -> None:
         try:
-            cm = kube_api.read_namespaced_config_map(
-                f"{RELEASE_NAME}-strategy-config", NAMESPACE
+            pvc = kube_api.read_namespaced_persistent_volume_claim(
+                "bt-strategy-data", NAMESPACE
             )
-            assert cm is not None
-            assert "schedule.yaml" in cm.data
+            assert pvc.status.phase == "Bound", "bt-strategy-data PVC not Bound"
         except ApiException as e:
             if e.status == 404:
-                pytest.skip("Strategy ConfigMap not found")
-            else:
-                raise
+                pytest.skip("bt-strategy-data PVC not found")
+            raise
+
+    def test_strategy_pod_running(self, kube_api: client.CoreV1Api) -> None:
+        pods = kube_api.list_namespaced_pod(
+            NAMESPACE,
+            label_selector="app.kubernetes.io/name=bt,app.kubernetes.io/component=strategy",
+        )
+        if not pods.items:
+            pytest.skip("No strategy pods found")
+        pod_name = pods.items[0].metadata.name
+        assert wait_for_pod_ready(kube_api, pod_name), f"Pod {pod_name} not ready"
 
 
-class TestHelmRelease:
-    """Test Helm release status."""
+class TestArgoCDSync:
+    """Verify ArgoCD application is synced (requires argocd CLI in PATH)."""
 
-    def test_helm_release_deployed(self, helm_installed: bool) -> None:
-        """Helm release should be deployed."""
-        assert helm_installed, "Helm release not found. Install with: helm install val-bittensor ..."
-
-    def test_helm_status_success(self) -> None:
-        """Helm release status should be 'deployed'."""
+    def test_argocd_app_exists(self) -> None:
         try:
             result = subprocess.run(
-                ["helm", "status", RELEASE_NAME, "-n", NAMESPACE, "--output", "json"],
+                ["kubectl", "get", "application", "bittensor-testnet", "-n", "argocd"],
                 capture_output=True,
                 text=True,
-                timeout=30,
-                check=True,
+                timeout=15,
             )
-            import json
+            if result.returncode != 0:
+                pytest.skip("ArgoCD application bittensor-testnet not found")
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pytest.skip("kubectl not available or timed out")
 
-            status = json.loads(result.stdout)
-            assert status.get("info", {}).get("status") == "deployed"
-        except (subprocess.TimeoutExpired, FileNotFoundError, json.JSONDecodeError) as e:
-            pytest.skip(f"Could not verify Helm status: {e}")
-
-
-class TestNamespace:
-    """Test namespace configuration."""
-
-    def test_namespace_exists(self, kube_api: client.CoreV1Api) -> None:
-        """val-bittensor namespace should exist."""
+    def test_argocd_app_synced(self) -> None:
         try:
-            ns = kube_api.read_namespace(NAMESPACE)
-            assert ns is not None
-        except ApiException as e:
-            pytest.fail(f"Namespace {NAMESPACE} not found: {e}")
-
-    def test_serviceaccount_exists(self, kube_api: client.CoreV1Api) -> None:
-        """ServiceAccount should exist."""
-        try:
-            sa = kube_api.read_namespaced_service_account(RELEASE_NAME, NAMESPACE)
-            assert sa is not None
-        except ApiException as e:
-            pytest.fail(f"ServiceAccount not found: {e}")
+            result = subprocess.run(
+                [
+                    "kubectl", "get", "application", "bittensor-testnet",
+                    "-n", "argocd",
+                    "-o", "jsonpath={.status.sync.status}",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            if result.returncode != 0:
+                pytest.skip("ArgoCD application not found")
+            sync_status = result.stdout.strip()
+            assert sync_status == "Synced", f"ArgoCD app sync status: {sync_status!r}"
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pytest.skip("kubectl not available or timed out")
