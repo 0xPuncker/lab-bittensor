@@ -55,7 +55,7 @@ spec:
       app.kubernetes.io/name: bt
       app.kubernetes.io/component: validator
   updateStrategy:
-    type: OnDelete
+    type: RollingUpdate
   template:
     metadata:
       labels:
