@@ -72,7 +72,7 @@ spec:
         runAsUser: 1000
       containers:
       - name: validator
-        image: ghcr.io/0xpuncker/lab-bittensor:10.3.0-539e7af
+        image: ghcr.io/0xpuncker/lab-bittensor:10.3.0-c56b6ae
         imagePullPolicy: Always
         command:
           - python
@@ -207,7 +207,7 @@ spec:
         runAsUser: 1000
       containers:
       - name: strategy
-        image: ghcr.io/0xpuncker/lab-bittensor:10.3.0-539e7af
+        image: ghcr.io/0xpuncker/lab-bittensor:10.3.0-c56b6ae
         imagePullPolicy: Always
         command:
         - python
