@@ -63,7 +63,8 @@ spec:
         app.kubernetes.io/component: validator
     spec:
       serviceAccountName: bt
-      hostNetwork: false
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       terminationGracePeriodSeconds: 60
       securityContext:
         fsGroup: 1000
@@ -145,7 +146,7 @@ spec:
           subPath: hotkey-default
           readOnly: true
         - name: state
-          mountPath: /home/valbittensor/.bittensor
+          mountPath: /home/valbittensor/.bittensor/miners
       volumes:
       - name: wallet
         secret:
@@ -198,6 +199,8 @@ spec:
         app.kubernetes.io/component: strategy
     spec:
       serviceAccountName: bt
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       securityContext:
         fsGroup: 1000
         runAsNonRoot: true

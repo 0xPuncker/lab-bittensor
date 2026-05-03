@@ -18,8 +18,8 @@ set -euo pipefail
 
 WALLET_NAME=""
 DRY_RUN=""
-NAMESPACE="val-bittensor"
-SECRET_NAME="val-bittensor-wallet"
+NAMESPACE="bittensor-testnet"
+SECRET_NAME="bt-wallet"
 BITTENSOR_DIR="${HOME}/.bittensor/wallets"
 
 while [[ $# -gt 0 ]]; do
@@ -44,11 +44,18 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "${WALLET_NAME}" ]]; then
-  echo "Usage: $0 <wallet-name> [--dry-run] [--namespace <ns>]" >&2
+  echo "Usage: $0 <wallet-name-or-full-path> [--dry-run] [--namespace <ns>]" >&2
   exit 1
 fi
 
-WALLET_PATH="${BITTENSOR_DIR}/${WALLET_NAME}"
+# Accept absolute path directly (e.g. /home/spectrum/.bittensor/wallets/testnet-validator)
+# or a plain wallet name resolved under BITTENSOR_DIR
+if [[ "${WALLET_NAME}" == /* ]]; then
+  WALLET_PATH="${WALLET_NAME}"
+  WALLET_NAME="$(basename "${WALLET_NAME}")"
+else
+  WALLET_PATH="${BITTENSOR_DIR}/${WALLET_NAME}"
+fi
 
 if [[ ! -d "${WALLET_PATH}" ]]; then
   echo "Error: Wallet directory not found: ${WALLET_PATH}" >&2
@@ -68,7 +75,7 @@ if [[ ! -f "${WALLET_PATH}/coldkeypub.txt" ]]; then
 fi
 
 # Find all hotkeys
-HOTKEYS=($(find "${WALLET_PATH}/hotkeys" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; 2>/dev/null || true))
+HOTKEYS=($(find "${WALLET_PATH}/hotkeys" -mindepth 1 -maxdepth 1 -type f -exec basename {} \; 2>/dev/null || true))
 
 if [[ ${#HOTKEYS[@]} -eq 0 ]]; then
   echo "Warning: No hotkeys found in ${WALLET_PATH}/hotkeys/" >&2

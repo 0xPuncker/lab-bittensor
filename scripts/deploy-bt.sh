@@ -12,10 +12,11 @@ echo "Step 1: Creating namespace $NAMESPACE..."
 kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
 
 echo "Step 2: Creating wallet secret..."
+WALLET_DIR="${HOME}/.bittensor/wallets/testnet-validator"
 kubectl create secret generic bt-wallet -n "$NAMESPACE" \
-  --from-file=coldkey="$HOME/.bittensor-temp/coldkey" \
-  --from-file=coldkeypub.txt="$HOME/.bittensor-temp/coldkeypub.txt" \
-  --from-file=hotkey-default="$HOME/.bittensor-temp/hotkey-default" \
+  --from-file=coldkey="${WALLET_DIR}/coldkey" \
+  --from-file=coldkeypub.txt="${WALLET_DIR}/coldkeypub.txt" \
+  --from-file=hotkey-default="${WALLET_DIR}/hotkeys/default" \
   --dry-run=client -o yaml | kubectl apply -f -
 
 echo "Step 3: Deploying ArgoCD application..."
