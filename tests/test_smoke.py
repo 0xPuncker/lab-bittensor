@@ -1,4 +1,4 @@
-"""Smoke tests for val-bittensor.
+"""Smoke tests for lab-bittensor.
 
 Until the incentive mechanism is defined, these tests just verify that the
 inherited template + bittensor 10 SDK imports + the Dummy wire protocol all

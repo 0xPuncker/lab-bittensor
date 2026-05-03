@@ -1,4 +1,4 @@
-# val-bittensor
+# lab-bittensor
 
 Validator learning workbench — a Kubernetes-deployed Bittensor validator built on the opentensor subnet template. Used to learn and test validator ops, incentive strategy, and emission mechanics on testnet.
 

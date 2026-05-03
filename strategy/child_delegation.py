@@ -1,5 +1,5 @@
 # The MIT License (MIT)
-# Copyright (c) 2026 val-bittensor contributors
+# Copyright (c) 2026 lab-bittensor contributors
 
 # Child-hotkey delegation management tooling.
 # Provides read queries, allocation planning, and dry-run execution for validator child-hotkey strategies.

@@ -1,5 +1,5 @@
 # The MIT License (MIT)
-# Copyright (c) 2026 val-bittensor contributors
+# Copyright (c) 2026 lab-bittensor contributors
 
 # Env-gated integration test for child-hotkey delegation against finney mainnet.
 

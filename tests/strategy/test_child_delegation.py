@@ -1,5 +1,5 @@
 # The MIT License (MIT)
-# Copyright (c) 2026 val-bittensor contributors
+# Copyright (c) 2026 lab-bittensor contributors
 
 # Unit tests for child-hotkey delegation functionality.
 

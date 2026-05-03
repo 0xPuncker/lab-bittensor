@@ -1,4 +1,4 @@
-"""val-bittensor strategy package: outside-in tooling for validator strategy & ops.
+"""lab-bittensor strategy package: outside-in tooling for validator strategy & ops.
 
 Modules:
 - data:               read-only fetch from Bittensor (mainnet/testnet) — `fetch_all_subnets`

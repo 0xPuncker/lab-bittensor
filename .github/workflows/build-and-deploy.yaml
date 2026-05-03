@@ -10,7 +10,8 @@ on:
 
 env:
   IMAGE_REGISTRY: ghcr.io
-  IMAGE_REPO: ghcr.io/0xpuncker/val-bittensor
+  IMAGE_REPO: ghcr.io/0xpuncker/lab-bittensor
+  BT_VERSION: "10.3.0"
   PYTHON_VERSION: "3.11"
   # Use Node.js 24 runtime for all JS-based actions (Node 20 deprecated Jun 2026)
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -91,7 +92,8 @@ jobs:
         with:
           images: ${{ env.IMAGE_REPO }}
           tags: |
-            type=sha,prefix={{branch}}-
+            type=raw,value=${{ env.BT_VERSION }}-{{sha}}
+            type=raw,value=${{ env.BT_VERSION }}
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push
@@ -108,8 +110,8 @@ jobs:
       - name: Extract image tag
         id: tag
         run: |
-          # metadata-action outputs :latest first; grep for the branch-sha tag explicitly
-          IMAGE_TAG=$(printf '%s' "${{ steps.meta.outputs.tags }}" | grep -E ":[a-zA-Z0-9_-]+-[a-f0-9]+" | head -n1)
+          # metadata-action outputs :latest first; grep for the versioned-sha tag explicitly
+          IMAGE_TAG=$(printf '%s' "${{ steps.meta.outputs.tags }}" | grep -E ":${{ env.BT_VERSION }}-[a-f0-9]+" | head -n1)
           echo "tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
           echo "${IMAGE_TAG}" > /tmp/image-tag.txt
 
@@ -127,7 +129,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Checkout val-bittensor
+      - name: Checkout lab-bittensor
         uses: actions/checkout@v4
 
       - name: Download image tag
@@ -138,7 +140,7 @@ jobs:
 
       - name: Set IMAGE_TAG env
         run: |
-          # artifact contains the full image reference, e.g. ghcr.io/0xpuncker/val-bittensor:main-abc1234
+          # artifact contains the full image reference, e.g. ghcr.io/0xpuncker/lab-bittensor:10.3.0-abc1234
           IMAGE_TAG=$(cat artifact/image-tag.txt)
           echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
           SHORT_SHA="${GITHUB_SHA:0:7}"
@@ -148,7 +150,7 @@ jobs:
         run: |
           echo "Updating K8s manifests to use image: ${IMAGE_TAG}"
           # Use the full IMAGE_TAG (includes branch prefix, e.g. main-abc1234) to match what was pushed
-          sed -i "s|image: ghcr.io/0xpuncker/val-bittensor:.*|image: ${IMAGE_TAG}|g" k8s/bittensor-testnet.yaml
+          sed -i "s|image: ghcr.io/0xpuncker/lab-bittensor:.*|image: ${IMAGE_TAG}|g" k8s/bittensor-testnet.yaml
           git diff k8s/bittensor-testnet.yaml
 
       - name: Commit and push K8s manifest update

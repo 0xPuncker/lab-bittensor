@@ -19,7 +19,7 @@ def MockWallet(config=None):  # noqa: N802 — PascalCase factory keeps drop-in 
     bt.MockWallet(config=...) call site in template/base/neuron.py:82, but is
     intentionally ignored — we always use a fixed test path.
     """
-    path = os.path.join(tempfile.gettempdir(), "val-bittensor-mock-wallets")
+    path = os.path.join(tempfile.gettempdir(), "lab-bittensor-mock-wallets")
     os.makedirs(path, exist_ok=True)
     wallet = bt.Wallet(name="mock", hotkey="mock", path=path)
     wallet.create_if_non_existent(

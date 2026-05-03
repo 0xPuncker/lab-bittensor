@@ -1,5 +1,5 @@
 # The MIT License (MIT)
-# Copyright (c) 2026 val-bittensor contributors
+# Copyright (c) 2026 lab-bittensor contributors
 
 # Strategy scheduler — runs evaluation and economics tools on schedule.
 
