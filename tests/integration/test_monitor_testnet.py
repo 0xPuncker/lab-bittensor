@@ -1,10 +1,15 @@
 """Integration tests for strategy.monitor against the real Bittensor testnet.
 
-SKIPPED BY DEFAULT. Tests run when these env vars are set:
+SKIPPED BY DEFAULT. Requires ONE of these two forms:
 
-  BT_TESTNET_WALLET   — wallet name under ~/.bittensor/wallets/ (required)
-  BT_TESTNET_HOTKEY   — hotkey name under that wallet            (default: "default")
-  BT_TESTNET_NETUID   — netuid the wallet is registered to       (required)
+  Form A — wallet files present locally:
+    BT_TESTNET_WALLET   wallet name under ~/.bittensor/wallets/ (required)
+    BT_TESTNET_HOTKEY   hotkey name under that wallet            (default: "default")
+    BT_TESTNET_NETUID   netuid the wallet is registered to       (required)
+
+  Form B — registered hotkey SS58 known directly (no local wallet files needed):
+    BT_TESTNET_HOTKEY_SS58  hotkey SS58 address                  (required)
+    BT_TESTNET_NETUID       netuid                               (required)
 
 Costs: zero TAO. All tests are read-only chain queries against
 `bt.Subtensor(network="test")`. No transactions, no weight setting.
@@ -15,8 +20,12 @@ What this catches that unit tests cannot:
   - Tensor vs. scalar inconsistencies in .S, .Tv, .last_update
   - `take_snapshot()` returning nonsense values for a live UID
 
-Run:
+Run (form A):
     BT_TESTNET_WALLET=mywallet BT_TESTNET_HOTKEY=validator BT_TESTNET_NETUID=1 \\
+      python -m pytest tests/integration/test_monitor_testnet.py -v
+
+Run (form B — wallet lives only in k8s Secret):
+    BT_TESTNET_HOTKEY_SS58=5Ge... BT_TESTNET_NETUID=1 \\
       python -m pytest tests/integration/test_monitor_testnet.py -v
 """
 
@@ -36,12 +45,15 @@ from strategy.monitor import (
 
 WALLET_NAME = os.environ.get("BT_TESTNET_WALLET")
 HOTKEY_NAME = os.environ.get("BT_TESTNET_HOTKEY", "default")
+HOTKEY_SS58_DIRECT = os.environ.get("BT_TESTNET_HOTKEY_SS58")
 NETUID_ENV = os.environ.get("BT_TESTNET_NETUID")
 NETUID = int(NETUID_ENV) if NETUID_ENV else None
 
+_has_credentials = bool(WALLET_NAME or HOTKEY_SS58_DIRECT)
+
 needs_wallet = pytest.mark.skipif(
-    not WALLET_NAME,
-    reason="BT_TESTNET_WALLET not set; skipping monitor testnet integration tests",
+    not _has_credentials,
+    reason="Set BT_TESTNET_WALLET or BT_TESTNET_HOTKEY_SS58; skipping monitor testnet integration tests",
 )
 needs_netuid = pytest.mark.skipif(
     NETUID is None,
@@ -56,6 +68,8 @@ def subtensor() -> bt.Subtensor:
 
 @pytest.fixture(scope="module")
 def hotkey_ss58() -> str:
+    if HOTKEY_SS58_DIRECT:
+        return HOTKEY_SS58_DIRECT
     wallet = bt.Wallet(name=WALLET_NAME, hotkey=HOTKEY_NAME)
     return wallet.hotkey.ss58_address
 
