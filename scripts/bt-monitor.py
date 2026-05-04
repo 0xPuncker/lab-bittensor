@@ -11,7 +11,6 @@ Usage:
 Requirements: kubectl configured and pointing at the k3s cluster.
 """
 import argparse
-import os
 import re
 import subprocess
 import sys
@@ -97,7 +96,7 @@ def get_pods() -> dict:
 
 def get_logs(pod: str, tail: int = 6) -> list[str]:
     out = kubectl("logs", pod, "-n", NAMESPACE, f"--tail={tail}")
-    return [strip_ansi(l) for l in out.splitlines() if l.strip()]
+    return [strip_ansi(line) for line in out.splitlines() if line.strip()]
 
 
 def get_chain_data() -> dict:
