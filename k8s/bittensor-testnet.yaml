@@ -17,8 +17,10 @@ data:
   SCHEDULE_EVALUATOR_INTERVAL_HOURS: "6"
   SCHEDULE_SNAPSHOT_TIME: "00:00"
   SCHEDULE_ECONOMICS_TIME: "01:00"
-  SCHEDULE_DRY_RUN: "true"
-  LOG_LEVEL: "DEBUG"
+  SCHEDULE_MONITOR_INTERVAL_MINUTES: "5"
+  SCHEDULE_DRY_RUN: "false"
+  LOG_LEVEL: "INFO"
+  BT_VALIDATOR_HOTKEY: "5GeZk5v8JPwNE8CVXrSLkkPnEE1UpBvfuqApBALS7SLPmh1i"
 
 ---
 # Headless Service required by the StatefulSet for stable pod DNS
@@ -399,6 +401,16 @@ spec:
             configMapKeyRef:
               name: bt-strategy-config
               key: LOG_LEVEL
+        - name: SCHEDULE_MONITOR_INTERVAL_MINUTES
+          valueFrom:
+            configMapKeyRef:
+              name: bt-strategy-config
+              key: SCHEDULE_MONITOR_INTERVAL_MINUTES
+        - name: BT_VALIDATOR_HOTKEY
+          valueFrom:
+            configMapKeyRef:
+              name: bt-strategy-config
+              key: BT_VALIDATOR_HOTKEY
         - name: BT_SUBTENSOR_NETWORK
           value: test
         - name: BT_NETUID
