@@ -70,9 +70,15 @@ async def forward(self):
     rewards = get_rewards(self, query=self.step, responses=responses)
 
     correct = int((rewards == 1.0).sum())
-    bt.logging.info(
-        f"Rewards: {correct}/{len(rewards)} correct (expected response = query*2={self.step * 2})"
-    )
+    if non_null > 0:
+        bt.logging.warning(
+            f"Forward pass complete: {non_null}/{len(miner_uids)} miners responded, "
+            f"{correct}/{len(rewards)} correct (expected {self.step * 2})"
+        )
+    else:
+        bt.logging.info(
+            f"Rewards: {correct}/{len(rewards)} correct (expected response = query*2={self.step * 2})"
+        )
     # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
     self.update_scores(rewards, miner_uids)
 
