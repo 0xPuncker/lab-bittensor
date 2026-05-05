@@ -30,8 +30,6 @@ SCORE_PATH = (
     "/testnet-validator/default/netuid1/validator/state.npz"
 )
 
-# Fetches chain + score data from inside the validator pod.
-# Metagraph sync takes ~10-25s — skipped with --no-chain.
 CHAIN_SCRIPT = f"""
 import bittensor as bt, numpy as np, sys
 try:
@@ -44,6 +42,10 @@ try:
     data = np.load('{SCORE_PATH}')
     scores = data['scores']
     nonzero = [(i, float(s)) for i, s in enumerate(scores) if s > 0]
+    vtrust = float(m.Tv[103]) if hasattr(m, 'Tv') else float(m.validator_trust[103])
+    stake = float(m.S[103])
+    permit = m.validator_permit[103]
+    last_update = int(m.last_update[103])
     print(f"BLOCK={{block}}")
     print(f"TOTAL_UIDS={{len(m.uids)}}")
     print(f"SERVING_UIDS={{serving}}")
@@ -51,12 +53,19 @@ try:
     print(f"UID103_SERVING={{axon.is_serving}}")
     print(f"UID103_SCORE={{scores[103]:.6f}}")
     print(f"NONZERO_SCORES={{len(nonzero)}}")
+    print(f"UID103_VTRUST={{vtrust:.6f}}")
+    print(f"UID103_STAKE={{stake:.2f}}")
+    print(f"UID103_PERMIT={{permit}}")
+    print(f"UID103_LAST_UPDATE={{last_update}}")
 except Exception as e:
     print(f"ERROR={{e}}", file=sys.stderr)
     raise
 """
 
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+_LOW_VTRUST = 0.05
+_STALE_BLOCKS_TESTNET = 400   # 4 epochs × 100 blocks
 
 
 def strip_ansi(s: str) -> str:
@@ -82,8 +91,6 @@ def get_pods() -> dict:
         if len(parts) < 5:
             continue
         name, ready, status = parts[0], parts[1], parts[2]
-        # kubectl appends "(Nm ago)" to restarts when restarts > 0:
-        # e.g. "1 (75m ago) 76m"  → parts[3]="1" parts[4]="(75m" parts[5]="ago)" parts[6]="76m"
         if len(parts) >= 7 and parts[4].startswith("("):
             restarts, age = parts[3], parts[6]
         elif len(parts) >= 6 and parts[4].startswith("("):
@@ -112,6 +119,40 @@ def get_chain_data() -> dict:
     return data
 
 
+def detect_alerts(chain: dict, current_block: int) -> list[tuple[str, str]]:
+    """Return list of (severity, message) tuples based on chain data."""
+    alerts = []
+    ip_port = chain.get("UID103_IP", "")
+    ip = ip_port.split(":")[0] if ":" in ip_port else ip_port
+    port = ip_port.split(":")[1] if ":" in ip_port else "0"
+    if ip == "0.0.0.0" or port == "0":
+        alerts.append(("CRITICAL", f"DEAD_AXON — axon not serving ({ip_port})"))
+
+    if chain.get("UID103_PERMIT", "False") == "False":
+        alerts.append(("CRITICAL", "PERMIT_LOST — validator permit not held; weights ignored by Yuma"))
+
+    vtrust_str = chain.get("UID103_VTRUST", "")
+    try:
+        vtrust = float(vtrust_str)
+        if vtrust == 0.0:
+            alerts.append(("WARNING", "ZERO_VTRUST — no validators copying our weights yet"))
+        elif vtrust < _LOW_VTRUST:
+            alerts.append(("WARNING", f"LOW_VTRUST — vtrust {vtrust:.4f} < {_LOW_VTRUST}"))
+    except ValueError:
+        pass
+
+    last_update_str = chain.get("UID103_LAST_UPDATE", "")
+    try:
+        last_update = int(last_update_str)
+        blocks_ago = current_block - last_update
+        if blocks_ago > _STALE_BLOCKS_TESTNET:
+            alerts.append(("WARNING", f"STALE_WEIGHTS — last set {blocks_ago} blocks ago (threshold {_STALE_BLOCKS_TESTNET})"))
+    except ValueError:
+        pass
+
+    return alerts
+
+
 def status_icon(pod: dict) -> str:
     parts = pod["ready"].split("/")
     all_ready = len(parts) == 2 and parts[0] == parts[1]
@@ -122,7 +163,7 @@ def status_icon(pod: dict) -> str:
     return "~"
 
 
-def hr(width: int = 60) -> None:
+def hr(width: int = 62) -> None:
     print("─" * width)
 
 
@@ -150,25 +191,56 @@ def render(pods: dict, chain: dict, logs: dict) -> None:
     else:
         print("  [chain data not fetched — run without --no-chain]")
 
-    # ── UID 103 ────────────────────────────────────────────────
-    print()
-    hr(W)
-    print("  UID 103  (our miner)")
-    if chain and "BLOCK" in chain:
+    # ── Validator Health ───────────────────────────────────────
+    if chain and "UID103_VTRUST" in chain:
+        print()
+        hr(W)
+        print("  VALIDATOR HEALTH  (UID 103)")
+        hr(W)
+
+        try:
+            current_block = int(chain.get("BLOCK", "0"))
+            stake = float(chain.get("UID103_STAKE", "0"))
+            vtrust = float(chain.get("UID103_VTRUST", "0"))
+            permit = chain.get("UID103_PERMIT", "False") == "True"
+            last_update = int(chain.get("UID103_LAST_UPDATE", "0"))
+            blocks_ago = current_block - last_update if current_block and last_update else 0
+
+            permit_str = "✓ YES" if permit else "✗ NO"
+            vtrust_bar_len = int(vtrust * 20)
+            vtrust_bar = f"[{'█' * vtrust_bar_len}{'░' * (20 - vtrust_bar_len)}]"
+
+            print(f"  Stake:   {stake:>14,.2f} α      Permit: {permit_str}")
+            print(f"  vTrust:  {vtrust_bar} {vtrust:.4f}")
+            print(f"  Axon:    {chain.get('UID103_IP', '?'):<22}  Serving: {chain.get('UID103_SERVING', '?')}")
+            print(f"  Weights: last set {blocks_ago} blocks ago  (block {last_update})")
+
+            alerts = detect_alerts(chain, current_block)
+            if alerts:
+                print()
+                for sev, msg in alerts:
+                    icon = "✗" if sev == "CRITICAL" else "⚠"
+                    print(f"  {icon} [{sev}] {msg}")
+            else:
+                print()
+                print("  ✓ No anomalies detected")
+        except (ValueError, TypeError) as exc:
+            print(f"  [health parse error: {exc}]")
+
+    # ── UID 103 score ──────────────────────────────────────────
+    if chain and "UID103_SCORE" in chain:
+        print()
+        hr(W)
+        print("  MINER SCORES  (UID 103 as seen by validator)")
         score = chain.get("UID103_SCORE", "?")
-        serving = chain.get("UID103_SERVING", "?")
-        axon = chain.get("UID103_IP", "?")
-        score_bar = ""
         try:
             pct = float(score)
             filled = int(pct * 20)
-            score_bar = f"  [{'█' * filled}{'░' * (20 - filled)}] {pct:.3f}"
+            score_bar = f"[{'█' * filled}{'░' * (20 - filled)}] {pct:.4f}"
         except ValueError:
-            pass
-        print(f"  Axon:       {axon}")
-        print(f"  is_serving: {serving}")
-        print(f"  Score:      {score_bar or score}")
-        print(f"  Non-zero scores in metagraph: {chain.get('NONZERO_SCORES', '?')}")
+            score_bar = score
+        print(f"  Score:             {score_bar}")
+        print(f"  Non-zero in graph: {chain.get('NONZERO_SCORES', '?')}")
 
     # ── Pods ───────────────────────────────────────────────────
     print()
