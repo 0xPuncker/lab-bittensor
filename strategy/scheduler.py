@@ -72,8 +72,7 @@ def run_evaluator(network: str, dry_run: bool) -> None:
         sys.executable, "-m", "strategy.subnet_evaluator",
         "--network", network,
     ]
-    if dry_run:
-        cmd.append("--dry-run")
+    # subnet_evaluator has no --dry-run flag; dry_run is intentionally unused here
 
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode == 0:
@@ -135,10 +134,8 @@ def run_economics(netuid: int, network: str, dry_run: bool) -> None:
     cmd = [
         sys.executable, "-m", "strategy.alpha_economics",
         "--netuid", str(netuid),
-        "--network", network,
     ]
-    if dry_run:
-        cmd.append("--dry-run")
+    # alpha_economics has no --network or --dry-run flags
 
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode == 0:
